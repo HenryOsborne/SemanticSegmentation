@@ -7,8 +7,8 @@ def ArgParser():
     parser.add_argument('--backbone', type=str, default='resnet',
                         choices=['resnet', 'xception', 'hrnet', 'mobilenet'],
                         help='backbone name (default: resnet)')
-    parser.add_argument('--model', type=str, default='ocrnet', choices=['ocrnet', 'deeplabv3plus'],
-                        help='model name (default:ocrnet)')
+    parser.add_argument('--models', type=str, default='ocrnet', choices=['ocrnet', 'deeplabv3plus'],
+                        help='models name (default:ocrnet)')
     parser.add_argument('--out-stride', type=int, default=16,
                         help='network output stride (default: 8)')
     parser.add_argument('--dataset', type=str, default='ade20k',

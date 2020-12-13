@@ -5,6 +5,7 @@ import torch.utils.data.dataloader as dataloader
 from torch.utils.data import Dataset
 from PIL import Image
 from torchvision import transforms
+from utils import custom_transforms as tr
 
 
 class ADE20K(Dataset):
@@ -45,16 +46,26 @@ class ADE20K(Dataset):
 
         if self.split_dir == 'train':
             pass
-        elif self.split_dir == 'test':
+        elif self.split_dir == 'val':
             pass
         else:
             raise NotImplementedError
 
-    def transforms_tr(self, sample):
+    def transform_tr(self, sample):
         composed_transforms = transforms.Compose([
-            transforms.RandomHorizontalFlip(),
-            transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-            transforms.ToTensor()
+            tr.RandomHorizontalFlip(),
+            tr.RandomScaleCrop(base_size=self.args.base_size, crop_size=self.args.crop_size),
+            tr.RandomGaussianBlur(),
+            tr.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+            tr.ToTensor()])
 
-        ])
+        return composed_transforms(sample)
 
+    def transform_val(self, sample):
+
+        composed_transforms = transforms.Compose([
+            tr.FixScaleCrop(crop_size=self.args.crop_size),
+            tr.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+            tr.ToTensor()])
+
+        return composed_transforms(sample)

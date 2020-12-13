@@ -1,4 +1,4 @@
-from model.backbone import hrnet, resnet
+from models.backbone import hrnet, resnet
 
 
 def build_backbone(backbone, out_stride):

@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from model.seg.aspp import build_aspp
-from model.seg.decoder import build_decoder
-from model.backbone import build_backbone
+from models.seg.aspp import build_aspp
+from models.seg.decoder import build_decoder
+from models.backbone import build_backbone
 
 
 class DeepLab(nn.Module):

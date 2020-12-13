@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from model.backbone import build_backbone
+from models.backbone import build_backbone
 
 
 def conv1d(inplane, plane):
