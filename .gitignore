@@ -1,2 +1,4 @@
 /dataset/ade20k/
 .idea/
+model/backbone/__pycache__/
+model/seg/__pycache__/
