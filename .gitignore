@@ -3,3 +3,4 @@
 .idea/
 model/backbone/__pycache__/
 model/seg/__pycache__/
+/run
