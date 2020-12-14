@@ -1,5 +1,127 @@
 import argparse
 import torch
+from utils.loss import SegmentationLosses
+from utils.lr_scheduler import LR_Scheduler
+from utils.saver import Saver
+from utils.metrics import Evaluator
+from dataloader import make_data_loader
+from models.seg.ocrnet import OCRNet
+import torch.optim
+import os
+import numpy as np
+from tqdm import tqdm
+
+
+class Trainer(object):
+    def __init__(self, args):
+        self.args = args
+
+        self.saver = Saver(args)
+        self.saver.save_experiment_config()
+
+        kwargs = {'num_workers': args.workers, 'pin_memory': True}
+        self.train_loader, self.val_loader, self.test_loader, self.nclass = make_data_loader(args, **kwargs)
+
+        self.model = OCRNet(self.nclass)
+        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=args.lr, momentum=args.momentum,
+                                         weight_decay=args.weight_decay,
+                                         nesterov=args.nesterov)
+        if args.use_balanced_weights:
+            weight = torch.tensor([0.2, 0.8], dtype=torch.float32)
+        else:
+            weight = None
+        self.criterion = SegmentationLosses(weight, cuda=args.cuda).build_loss(mode=args.loss_type)
+
+        self.evaluator = Evaluator(self.nclass)
+        self.scheduler = LR_Scheduler(args.lr_scheduler, args.lr, args.epochs, len(self.train_loader))
+
+        if args.cuda:
+            self.model = self.model.cuda()
+
+        self.best_pred = 0.0
+        if args.resume is not None:
+            if not os.path.isfile(args.resume):
+                raise RuntimeError("=> no checkpoint found at '{}'".format(args.resume))
+            checkpoint = torch.load(args.resume)
+            args.start_epoch = checkpoint['epoch']
+            if args.cuda:
+                self.model.module.load_state_dict(checkpoint['state_dict'])
+            else:
+                self.model.load_state_dict(checkpoint['state_dict'])
+            if not args.ft:
+                self.optimizer.load_state_dict(checkpoint['optimizer'])
+            self.best_pred = checkpoint['best_pred']
+            print("=> loaded checkpoint '{}' (epoch {})"
+                  .format(args.resume, checkpoint['epoch']))
+
+        if args.ft:
+            args.start_epoch = 0
+
+    def training(self, epoch):
+        train_loss = 0.0
+        self.model.train()
+        tbar = tqdm(self.train_loader)
+        num_img_tr = len(self.train_loader)
+        for i, sample in enumerate(tbar):
+            image, target = sample['image'], sample['label']
+            if self.args.cuda:
+                image, target = image.cuda(), target.cuda()
+            self.scheduler(self.optimizer, i, epoch, self.best_pred)
+            self.optimizer.zero_grad()
+            output, _ = self.model(image)
+            loss = self.criterion(output, target)
+            loss.backward()
+            self.optimizer.step()
+            train_loss += loss.item()
+
+        print('[Epoch:{},num_images:{}]'.format(epoch, i * self.args.batch_size + image.data.shape[0]))
+        print('Loss:{}'.format(train_loss))
+
+        if self.args.nu_val:
+            is_best = False
+            self.saver.save_checkpoint({'epoch': epoch + 1, 'state_dict': self.model.module.state_dict(),
+                                        'optimizer': self.optimizer.state_dict(), 'best_pred': self.best_pred}, is_best)
+
+    def validation(self, epoch):
+        self.model.eval()
+        self.evaluator.reset()
+        tbar = tqdm(self.val_loader, desc='\r')
+        test_loss = 0.0
+        for i, sample in enumerate(tbar):
+            image, target = sample['image'], sample['label']
+            if self.args.cuda:
+                image, target = image.cuda(), target.cuda()
+            with torch.no_grad():
+                _, output = self.model(image)
+            loss = self.criterion(output, target)
+            test_loss += loss.item()
+
+            pred = output.data.cpu().numpy()
+            target = target.cpu().numpy()
+            pred = np.argmax(pred, axis=1)
+            self.evaluator.add_batch(target, pred)
+
+        Acc = self.evaluator.Pixel_Accuracy()
+        Acc_class = self.evaluator.Pixel_Accuracy_Class()
+        road_iou, mIOU = self.evaluator.Mean_Intersection_over_Union()
+        FWIOU = self.evaluator.Frequency_Weighted_Intersection_over_Union()
+
+        print('Validation:\n')
+        print('[Epoch:{},num_image:{}]'.format(epoch, i * self.args.batch_size + image.data.shape[0]))
+        print('Acc:{},Acc_class:{},mIOU:{},road_iou:{},fwIOU:{}'.format(Acc, Acc_class, mIOU, road_iou, FWIOU))
+        print('Loss:{}'.format(test_loss))
+
+        new_pred = road_iou
+        if new_pred > self.best_pred:
+            is_best = True
+            self.best_pred = new_pred
+            self.saver.save_checkpoint(
+                {
+                    'epoch': epoch + 1,
+                    'state_dict': self.model.module.state_dict(),
+                    'optimizer': self.optimizer.state_dict(),
+                    'best_pred': self.best_pred,
+                }, is_best)
 
 
 def ArgParser():
@@ -7,20 +129,18 @@ def ArgParser():
     parser.add_argument('--backbone', type=str, default='resnet',
                         choices=['resnet', 'xception', 'hrnet', 'mobilenet'],
                         help='backbone name (default: resnet)')
-    parser.add_argument('--models', type=str, default='ocrnet', choices=['ocrnet', 'deeplabv3plus'],
+    parser.add_argument('--models', type=str, default='ocrnet', choices=['ocrnet', 'deeplabv3plus', 'deeplab_siis'],
                         help='models name (default:ocrnet)')
     parser.add_argument('--out-stride', type=int, default=16,
                         help='network output stride (default: 8)')
-    parser.add_argument('--dataset', type=str, default='ade20k',
-                        choices=['pascal', 'ade20k', 'road'],
+    parser.add_argument('--dataset', type=str, default='deepglobe',
+                        choices=['deepglobe', 'ade20k', 'road'],
                         help='dataset name (default: ade20k)')
-    parser.add_argument('--use-sbd', action='store_true', default=False,
-                        help='whether to use SBD dataset (default: True)')
     parser.add_argument('--workers', type=int, default=4,
                         metavar='N', help='dataloader threads')
     parser.add_argument('--base-size', type=int, default=512,
                         help='base image size')
-    parser.add_argument('--crop-size', type=int, default=512,
+    parser.add_argument('--crop-size', type=int, default=256,
                         help='crop image size')
     parser.add_argument('--sync-bn', type=bool, default=None,
                         help='whether to use sync bn (default: auto)')
@@ -41,7 +161,7 @@ def ArgParser():
     parser.add_argument('--test-batch-size', type=int, default=2,
                         metavar='N', help='input batch size for \
                                     testing (default: 2)')
-    parser.add_argument('--use-balanced-weights', action='store_true', default=False,  # 可以考虑改成True
+    parser.add_argument('--use-balanced-weights', action='store_true', default=False,
                         help='whether to use balanced weights (default: False)')
 
     # optimizer params
@@ -99,9 +219,9 @@ def ArgParser():
     # default settings for epochs, batch_size and lr
     if args.epochs is None:
         epoches = {
-            'pascal': 50,
             'ade20k': 50,
-            'road': 10
+            'road': 15,
+            'deepglobe': 15
         }
         args.epochs = epoches[args.dataset.lower()]
 
@@ -113,14 +233,14 @@ def ArgParser():
 
     if args.lr is None:
         lrs = {
-            'pascal': 0.007,
             'ade20k': 0.007,
-            'road': 0.007
+            'road': 0.007,
+            'deepglobe': 0.007
         }
         args.lr = lrs[args.dataset.lower()] / (4 * len(args.gpu_ids)) * args.batch_size
 
     if args.checkname is None:
-        args.checkname = str(args.model) + str(args.backbone)
+        args.checkname = str(args.models) + str(args.backbone)
 
     return args
 
@@ -128,3 +248,11 @@ def ArgParser():
 if __name__ == '__main__':
     args = ArgParser()
     print(args)
+    torch.manual_seed(args.seed)
+    trainer = Trainer(args)
+    print('Starting Epoch:', trainer.args.start_epoch)
+    print('Total Epoches:', trainer.args.epochs)
+    for epoch in range(trainer.args.start_epoch, trainer.args.epochs):
+        trainer.training(epoch)
+        if not trainer.args.no_val and epoch % args.eval_interval == (args.eval_interval - 1):
+            trainer.validation(epoch)

@@ -9,7 +9,7 @@ from utils import custom_transforms as tr
 
 
 class ADE20K(Dataset):
-    NUM_Class = 150
+    NUM_CLASSES = 150
 
     def __init__(self, args, base_dir='dataset/ade20k', split='train'):
         super(ADE20K, self).__init__()

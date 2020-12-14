@@ -1,4 +1,5 @@
 /dataset/ade20k/
+/dataset/DeepGlobe
 .idea/
 model/backbone/__pycache__/
 model/seg/__pycache__/

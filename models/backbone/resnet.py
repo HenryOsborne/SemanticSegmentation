@@ -126,7 +126,7 @@ class ResNet(nn.Module):
         x = self.layer3(x)
         feat2 = x
         x = self.layer4(x)
-        if model_type == 'orcnet':
+        if model_type == 'ocrnet':
             return feat2, x
         elif model_type == 'deeplabv3plus':
             return feat1, x

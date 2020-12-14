@@ -110,15 +110,14 @@ def data_crop():
     '''
     # Basic setting
     data_dir = 'dataset/DeepGlobe'
-    split = 'train'
     class_num = 2
     crop_params = [512, 512, 128]
 
     # Primary preparation work.
     global_num = 1  # 作为结果存储的编号
-    image_names = filelist(data_dir + '/%s' % 'JEPGImages', ifPath=True)
+    image_names = filelist(data_dir + '/%s' % 'JPEGImages', ifPath=True)
     label_names = filelist(data_dir + '/%s' % 'Annotations', ifPath=True)
-    img_out_dir = data_dir + "/%s_out" % 'JEPGImages'
+    img_out_dir = data_dir + "/%s_out" % 'JPEGImages'
     label_out_dir = data_dir + "/%s_out" % 'Annotations'
     if not os.path.exists(img_out_dir):
         os.mkdir(img_out_dir)
