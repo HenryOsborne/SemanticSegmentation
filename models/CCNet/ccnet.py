@@ -1,28 +1,21 @@
-import torch.nn as nn
-from torch.nn import functional as F
-import math
-import torch.utils.model_zoo as model_zoo
-import torch
 import numpy as np
-from torch.autograd import Variable
+import torch
+import torch.nn as nn
+from .CC import CC_module as CrissCrossAttention
+
 affine_par = True
-import functools
 
-import sys, os
+# from Synchronized.sync_batchnorm import SynchronizedBatchNorm2d as SyncBN
+BatchNorm2d = nn.BatchNorm2d  # SyncBN#functools.partial(InPlaceABNSync, activation='identity')
 
-#from cc_attention import CrissCrossAttention 
-from .CC import CC_module as CrissCrossAttention 
-#from .utils.pyt_utils import load_model
-
-#from Synchronized.sync_batchnorm import SynchronizedBatchNorm2d as SyncBN
-BatchNorm2d = nn.BatchNorm2d#SyncBN#functools.partial(InPlaceABNSync, activation='identity')
 
 def outS(i):
     i = int(i)
-    i = (i+1)/2
-    i = int(np.ceil((i+1)/2.0))
-    i = (i+1)/2
+    i = (i + 1) / 2
+    i = int(np.ceil((i + 1) / 2.0))
+    i = (i + 1) / 2
     return i
+
 
 def conv3x3(in_planes, out_planes, stride=1):
     "3x3 convolution with padding"
@@ -32,12 +25,13 @@ def conv3x3(in_planes, out_planes, stride=1):
 
 class Bottleneck(nn.Module):
     expansion = 4
+
     def __init__(self, inplanes, planes, stride=1, dilation=1, downsample=None, fist_dilation=1, multi_grid=1):
         super(Bottleneck, self).__init__()
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
         self.bn1 = BatchNorm2d(planes)
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride,
-                               padding=dilation*multi_grid, dilation=dilation*multi_grid, bias=False)
+                               padding=dilation * multi_grid, dilation=dilation * multi_grid, bias=False)
         self.bn2 = BatchNorm2d(planes)
         self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1, bias=False)
         self.bn3 = BatchNorm2d(planes * 4)
@@ -64,7 +58,7 @@ class Bottleneck(nn.Module):
         if self.downsample is not None:
             residual = self.downsample(x)
 
-        out = out + residual      
+        out = out + residual
         out = self.relu_inplace(out)
 
         return out
@@ -75,17 +69,17 @@ class RCCAModule(nn.Module):
         super(RCCAModule, self).__init__()
         inter_channels = in_channels // 4
         self.conva = nn.Sequential(nn.Conv2d(in_channels, inter_channels, 3, padding=1, bias=False),
-                                   BatchNorm2d(inter_channels),nn.ReLU(inplace=False))
+                                   BatchNorm2d(inter_channels), nn.ReLU(inplace=False))
         self.cca = CrissCrossAttention(inter_channels)
         self.convb = nn.Sequential(nn.Conv2d(inter_channels, inter_channels, 3, padding=1, bias=False),
-                                   BatchNorm2d(inter_channels),nn.ReLU(inplace=False))
+                                   BatchNorm2d(inter_channels), nn.ReLU(inplace=False))
 
         self.bottleneck = nn.Sequential(
-            nn.Conv2d(in_channels+inter_channels, out_channels, kernel_size=3, padding=1, dilation=1, bias=False),
-            BatchNorm2d(out_channels),nn.ReLU(inplace=False),
+            nn.Conv2d(in_channels + inter_channels, out_channels, kernel_size=3, padding=1, dilation=1, bias=False),
+            BatchNorm2d(out_channels), nn.ReLU(inplace=False),
             nn.Dropout2d(0.1),
             nn.Conv2d(512, num_classes, kernel_size=1, stride=1, padding=0, bias=True)
-            )
+        )
 
     def forward(self, x, recurrence=2):
         output = self.conva(x)
@@ -95,6 +89,7 @@ class RCCAModule(nn.Module):
 
         output = self.bottleneck(torch.cat([x, output], 1))
         return output
+
 
 class ResNet(nn.Module):
     def __init__(self, block, layers, num_classes, recurrence):
@@ -112,22 +107,22 @@ class ResNet(nn.Module):
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
         self.relu = nn.ReLU(inplace=False)
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1, ceil_mode=True) # change
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1, ceil_mode=True)  # change
         self.layer1 = self._make_layer(block, 64, layers[0])
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=1, dilation=2)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=1, dilation=4, multi_grid=(1,1,1))
-        #self.layer5 = PSPModule(2048, 512)
+        self.layer4 = self._make_layer(block, 512, layers[3], stride=1, dilation=4, multi_grid=(1, 1, 1))
+        # self.layer5 = PSPModule(2048, 512)
         self.head = RCCAModule(2048, 512, num_classes)
 
         self.dsn = nn.Sequential(
             nn.Conv2d(1024, 512, kernel_size=3, stride=1, padding=1),
-            BatchNorm2d(512),nn.ReLU(inplace=False),
+            BatchNorm2d(512), nn.ReLU(inplace=False),
             nn.Dropout2d(0.1),
             nn.Conv2d(512, num_classes, kernel_size=1, stride=1, padding=0, bias=True)
-            )
-        self.conv4 = nn.Conv2d(num_classes*2, num_classes, kernel_size=1, stride=1, bias=False)
-        #self.criterion = criterion
+        )
+        self.conv4 = nn.Conv2d(num_classes * 2, num_classes, kernel_size=1, stride=1, bias=False)
+        # self.criterion = criterion
         self.recurrence = recurrence
 
     def _make_layer(self, block, planes, blocks, stride=1, dilation=1, multi_grid=1):
@@ -136,19 +131,21 @@ class ResNet(nn.Module):
             downsample = nn.Sequential(
                 nn.Conv2d(self.inplanes, planes * block.expansion,
                           kernel_size=1, stride=stride, bias=False),
-                BatchNorm2d(planes * block.expansion,affine = affine_par))
+                BatchNorm2d(planes * block.expansion, affine=affine_par))
 
         layers = []
-        generate_multi_grid = lambda index, grids: grids[index%len(grids)] if isinstance(grids, tuple) else 1
-        layers.append(block(self.inplanes, planes, stride,dilation=dilation, downsample=downsample, multi_grid=generate_multi_grid(0, multi_grid)))
+        generate_multi_grid = lambda index, grids: grids[index % len(grids)] if isinstance(grids, tuple) else 1
+        layers.append(block(self.inplanes, planes, stride, dilation=dilation, downsample=downsample,
+                            multi_grid=generate_multi_grid(0, multi_grid)))
         self.inplanes = planes * block.expansion
         for i in range(1, blocks):
-            layers.append(block(self.inplanes, planes, dilation=dilation, multi_grid=generate_multi_grid(i, multi_grid)))
+            layers.append(
+                block(self.inplanes, planes, dilation=dilation, multi_grid=generate_multi_grid(i, multi_grid)))
 
         return nn.Sequential(*layers)
 
     def forward(self, x, labels=None):
-        #print(111)
+        # print(111)
         size = (x.shape[2], x.shape[3])
         x = self.relu1(self.bn1(self.conv1(x)))
         x = self.relu2(self.bn2(self.conv2(x)))
@@ -156,37 +153,39 @@ class ResNet(nn.Module):
         x = self.maxpool(x)
         x = self.layer1(x)
         x = self.layer2(x)
-        #print(222)
+        # print(222)
         x = self.layer3(x)
-        #print(333)
+        # print(333)
         x_dsn = self.dsn(x)
-        #print(x_dsn.shape)
+        # print(x_dsn.shape)
         x = self.layer4(x)
-        #print(x.shape)
+        # print(x.shape)
         x = self.head(x, self.recurrence)
-        #print(x.shape)
-        outs = torch.cat([x, x_dsn],1)
-        #print(outs.shape)
+        # print(x.shape)
+        outs = torch.cat([x, x_dsn], 1)
+        # print(outs.shape)
         outs = self.conv4(outs)
         outs = nn.Upsample(size, mode='bilinear', align_corners=True)(outs)
-        #print(outs)
+        # print(outs)
         return outs
+
 
 def resnet152(num_classes=4, pretrained_model=None, recurrence=2, **kwargs):
     model = ResNet(Bottleneck, [3, 8, 36, 3], num_classes, recurrence)
     return model
 
+
 if __name__ == "__main__":
     device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
     model = resnet152()
     model = model.to(device)
-    x = torch.rand((4,3,320,320))
-    #x = torch.tensor(x, dtype = torch.float)
-    x = x.to(device)  
+    x = torch.rand((4, 3, 320, 320))
+    # x = torch.tensor(x, dtype = torch.float)
+    x = x.to(device)
     print(x.shape)
     print('====================')
     output = model(x)
     print('====================')
     print(output.shape)
-    #torch.save(model.state_dict(), 'ccnet_{}.pth'.format(0))
-    #torch.save(model, 'model_{}.pt'.format(0))
+    # torch.save(model.state_dict(), 'ccnet_{}.pth'.format(0))
+    # torch.save(model, 'model_{}.pt'.format(0))
