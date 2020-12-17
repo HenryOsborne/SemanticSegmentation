@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from urllib.request import urlretrieve
+import numpy as np
 
 BatchNorm2d = nn.BatchNorm2d
 BN_MOMENTUM = 0.1
@@ -313,6 +314,25 @@ class HRNetV2(nn.Module):
         self.stage4, pre_stage_channels = self._make_stage(
             self.stage4_cfg, num_channels, multi_scale_output=True)
 
+        last_inp_channels = np.int(np.sum(pre_stage_channels))
+
+        self.last_layer = nn.Sequential(
+            nn.Conv2d(
+                in_channels=last_inp_channels,
+                out_channels=last_inp_channels,
+                kernel_size=1,
+                stride=1,
+                padding=0),
+            BatchNorm2d(last_inp_channels, momentum=BN_MOMENTUM),
+            nn.ReLU(inplace=False),
+            nn.Conv2d(
+                in_channels=last_inp_channels,
+                out_channels=2,
+                kernel_size=extra['FINAL_CONV_KERNEL'],
+                stride=1,
+                padding=1 if extra['FINAL_CONV_KERNEL'] == 3 else 0)
+        )
+
     def _make_transition_layer(
             self, num_channels_pre_layer, num_channels_cur_layer):
         num_branches_cur = len(num_channels_cur_layer)
@@ -440,8 +460,8 @@ class HRNetV2(nn.Module):
 
         x = torch.cat([x[0], x1, x2, x3], 1)
 
-        # x = self.last_layer(x)
-        return [x]
+        x = self.last_layer(x)
+        return x
 
 
 def hrnetv2(pretrained=False, **kwargs):
@@ -456,4 +476,4 @@ if __name__ == '__main__':
     model = hrnetv2(pretrained=True)
     inpu = torch.randn(2, 3, 512, 512)
     output = model(inpu)
-    print(output)
+    print(output.size())
