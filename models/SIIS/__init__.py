@@ -1,10 +1,10 @@
-from models.HF_FCN import HF_FCN
-from models.DeeplabV3_plus import DeeplabV3_plus
-from models.ContrastNets import ResUnet, ResUnet_SIIS
-from models.SIIS_NET import (
+from models.SIIS.HF_FCN import HF_FCN
+from models.SIIS.DeeplabV3_plus import DeeplabV3_plus
+from models.SIIS.ContrastNets import ResUnet, ResUnet_SIIS
+from models.SIIS.SIIS_NET import (
     Vgg_SIIS, Resnet_SIIS, Deeplab_SIIS
 )
-from models.UNet import UNet, UNet_SIIS
+from models.SIIS.UNet import UNet, UNet_SIIS
 
 
 def build_model(num_classes, siis_size=None, net_num='12345678'):
@@ -91,9 +91,11 @@ def build_model(num_classes, siis_size=None, net_num='12345678'):
 
 
 if __name__ == '__main__':
-    model = build_model(2, [32, 32], '44330020')
     import torch
 
-    inpu = torch.randn(2, 3, 512, 512)
+    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+    model = build_model(2, [32, 32], '44330020').to(device)
+
+    inpu = torch.randn(2, 3, 512, 512).to(device)
     output = model(inpu)
     print(output.size())

@@ -10,7 +10,7 @@ import torch
 from torch import nn
 # from torch.nn import functional as F
 # from torchvision.models import resnet
-from models import resnet
+from models.SIIS import resnet
 from .model_utils import resize
 from .DeeplabV3_plus import ASPP
 from .BasicModule import BasicModule
@@ -19,6 +19,7 @@ from .SIIS_Kernel import SIIS
 
 class Vgg_SIIS(BasicModule):
     """ Main module：Vgg_SIIS """
+
     def __init__(self, num_classes=2,
                  siis_size=[32, 32], width=1, kw=9, dim=128, arch=1):
         super(Vgg_SIIS, self).__init__()
@@ -63,7 +64,7 @@ class Vgg_SIIS(BasicModule):
 
     def forward(self, x):
         size = x.size()[2:]
-        size_4 = [s//4 for s in size]
+        size_4 = [s // 4 for s in size]
         x = self.layers(x)  # s/8
 
         x = self.conv_s(x)  # 512 -> dim
@@ -85,6 +86,7 @@ class Vgg_SIIS(BasicModule):
 
 class Resnet_SIIS(BasicModule):
     """ Main module: Resnet_SIIS """
+
     def __init__(self, num_classes=2,
                  siis_size=[32, 32], width=1, kw=9, dim=128, arch=1,
                  resnet_arch='resnet50', output_stride=8, layer_num=2):
@@ -105,12 +107,12 @@ class Resnet_SIIS(BasicModule):
 
         self.layers = nn.Sequential()
         for i in range(layer_num):
-            self.layers.add_module('layer%d' % (i+1), encoder['layer%d' % (i+1)])
+            self.layers.add_module('layer%d' % (i + 1), encoder['layer%d' % (i + 1)])
         layers_dim = [256, 512, 1024, 2048, 2048, 1024, 512]
         # layer_outSize = [s/4, s/output_stride, s/output_stride, ...]
 
         # conv_s - Make sure SIIS input dim. in: layers(out), out: siis(in).
-        self.conv_s = self._make_layer(layers_dim[layer_num-1], dim, 1)
+        self.conv_s = self._make_layer(layers_dim[layer_num - 1], dim, 1)
         self.siis = SIIS(siis_size, width, kw, dim, arch)  # in: conv_s(out)
 
         # Decoder
@@ -159,6 +161,7 @@ class Resnet_SIIS(BasicModule):
 
 class Deeplab_SIIS(BasicModule):
     """ Main Deeplab_SIIS models. """
+
     def __init__(self, num_classes=2,
                  siis_size=[32, 32], width=1, kw=9, dim=128, arch=1,
                  resnet_arch='resnet50', output_stride=8, layer_num=2):
@@ -180,18 +183,18 @@ class Deeplab_SIIS(BasicModule):
 
         self.layers = nn.Sequential()
         for i in range(layer_num):
-            self.layers.add_module('layer%d' % (i+1), encoder['layer%d' % (i+1)])
+            self.layers.add_module('layer%d' % (i + 1), encoder['layer%d' % (i + 1)])
         layers_dim = [256, 512, 1024, 2048, 2048, 1024, 512]
         # layer_outSize = [s/4, s/output_stride, s/output_stride, ...]
 
         self.conv2 = self._make_layer(64, 48, 1)  # in: pool1(out)
         # ASPP
         self.aspp = ASPP(
-            in_channel=layers_dim[layer_num-1], depth=aspp_depth
+            in_channel=layers_dim[layer_num - 1], depth=aspp_depth
         )  # ASPP: in: layers(out), fix_size=s/8
 
         # in: concat[conv2(out), Up(aspp(out))], out: siis(in)
-        self.conv3 = self._make_layer(aspp_depth+48, dim, 1)  # s/4
+        self.conv3 = self._make_layer(aspp_depth + 48, dim, 1)  # s/4
         # SIIS
         self.siis = SIIS(siis_size, width, kw, dim, arch)  # size=siis_size, dim=dim
 
@@ -202,7 +205,7 @@ class Deeplab_SIIS(BasicModule):
 
         self.out_conv = nn.Conv2d(dim, num_classes, 1, 1)  # s/1 - output
 
-        self.model_name = 'deeplab2_'+self.siis.name
+        self.model_name = 'deeplab2_' + self.siis.name
 
     def _make_layer(self, in_channel, out_channel, kernel_size, padding=0):
         return nn.Sequential(
@@ -216,7 +219,7 @@ class Deeplab_SIIS(BasicModule):
         x = self.conv1(x)
         pool2 = self.pool1(x)
         size_4 = pool2.shape[2:]
-        size_8 = [s//2 for s in size_4]
+        size_8 = [s // 2 for s in size_4]
 
         x = self.layers(pool2)  # s/output_stride
         # x = self.layers[1:](x)  # s/output_stride

@@ -237,7 +237,7 @@ class HighResolutionModule(nn.Module):
                     y = y + F.interpolate(
                         self.fuse_layers[i][j](x[j]),
                         size=[height_output, width_output],
-                        mode='bilinear')
+                        mode='bilinear', align_corners=False)
                 else:
                     y = y + self.fuse_layers[i][j](x[j])
             x_fuse.append(self.relu(y))
@@ -471,9 +471,12 @@ class HighResolutionNet(nn.Module):
 
         # Upsampling
         x0_h, x0_w = x[0].size(2), x[0].size(3)
-        x1 = F.interpolate(x[1], size=(x0_h, x0_w), mode='bilinear', align_corners=False)
-        x2 = F.interpolate(x[2], size=(x0_h, x0_w), mode='bilinear', align_corners=False)
-        x3 = F.interpolate(x[3], size=(x0_h, x0_w), mode='bilinear', align_corners=False)
+        x1 = F.interpolate(
+            x[1], size=(x0_h, x0_w), mode='bilinear', align_corners=False)
+        x2 = F.interpolate(
+            x[2], size=(x0_h, x0_w), mode='bilinear', align_corners=False)
+        x3 = F.interpolate(
+            x[3], size=(x0_h, x0_w), mode='bilinear', align_corners=False)
 
         x = torch.cat([x[0], x1, x2, x3], 1)
 
@@ -506,8 +509,9 @@ def get_seg_model(**kwargs):
 
 
 if __name__ == '__main__':
-    inpu = torch.rand(2, 3, 512, 512)
-    model = get_seg_model()
+    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+    inpu = torch.rand(2, 3, 512, 512, device=device)
+    model = get_seg_model().to(device)
     output = model(inpu)
     print(output.size())
     print(output.shape)

@@ -7,7 +7,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from .BasicModule import BasicModule
-from models import resnet
+from models.SIIS import resnet
 
 
 def resize(tensor, newsize):

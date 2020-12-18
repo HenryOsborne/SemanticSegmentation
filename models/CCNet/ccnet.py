@@ -145,7 +145,6 @@ class ResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x, labels=None):
-        # print(111)
         size = (x.shape[2], x.shape[3])
         x = self.relu1(self.bn1(self.conv1(x)))
         x = self.relu2(self.bn2(self.conv2(x)))
@@ -153,9 +152,7 @@ class ResNet(nn.Module):
         x = self.maxpool(x)
         x = self.layer1(x)
         x = self.layer2(x)
-        # print(222)
         x = self.layer3(x)
-        # print(333)
         x_dsn = self.dsn(x)
         # print(x_dsn.shape)
         x = self.layer4(x)
@@ -170,22 +167,17 @@ class ResNet(nn.Module):
         return outs
 
 
-def resnet152(num_classes=4, pretrained_model=None, recurrence=2, **kwargs):
+def resnet152(num_classes=2, pretrained_model=None, recurrence=2, **kwargs):
     model = ResNet(Bottleneck, [3, 8, 36, 3], num_classes, recurrence)
     return model
 
 
 if __name__ == "__main__":
-    device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     model = resnet152()
     model = model.to(device)
-    x = torch.rand((4, 3, 320, 320))
-    # x = torch.tensor(x, dtype = torch.float)
+    x = torch.rand((2, 3, 512, 512))
     x = x.to(device)
     print(x.shape)
-    print('====================')
     output = model(x)
-    print('====================')
     print(output.shape)
-    # torch.save(model.state_dict(), 'ccnet_{}.pth'.format(0))
-    # torch.save(model, 'model_{}.pt'.format(0))

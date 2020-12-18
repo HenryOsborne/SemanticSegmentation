@@ -5,7 +5,7 @@ from torch.nn import Softmax
 
 
 def INF(B, H, W):
-    return -torch.diag(torch.tensor(float("inf")).cuda(1).repeat(H), 0).unsqueeze(0).repeat(B * W, 1, 1)
+    return -torch.diag(torch.tensor(float("inf")).cuda(0).repeat(H), 0).unsqueeze(0).repeat(B * W, 1, 1)
 
 
 class CC_module(nn.Module):

@@ -4,7 +4,7 @@ Contract Nets with SIIS.
 '''
 import torch
 from torch import nn
-from models import resnet
+from models.SIIS import resnet
 from .BasicModule import BasicModule
 from .model_utils import resize
 from .SIIS_Kernel import SIIS
