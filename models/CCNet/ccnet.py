@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
-from .CC import CC_module as CrissCrossAttention
+from models.CCNet.CC import CC_module as CrissCrossAttention
 
 affine_par = True
 
