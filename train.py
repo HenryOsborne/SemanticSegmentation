@@ -10,6 +10,7 @@ import torch.optim
 import os
 import numpy as np
 from tqdm import tqdm
+from models.SIIS import build_model
 
 
 class Trainer(object):
@@ -22,7 +23,8 @@ class Trainer(object):
         kwargs = {'num_workers': args.workers, 'pin_memory': True}
         self.train_loader, self.val_loader, self.test_loader, self.nclass = make_data_loader(args, **kwargs)
 
-        self.model = OCRNet(self.nclass)
+        # self.model = OCRNet(self.nclass)
+        self.model = build_model(2, [32, 32], '44330020')
         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=args.lr, momentum=args.momentum,
                                          weight_decay=args.weight_decay,
                                          nesterov=args.nesterov)
@@ -68,7 +70,7 @@ class Trainer(object):
                 image, target = image.cuda(), target.cuda()
             self.scheduler(self.optimizer, i, epoch, self.best_pred)
             self.optimizer.zero_grad()
-            output, _ = self.model(image)
+            output = self.model(image)
             loss = self.criterion(output, target)
             loss.backward()
             self.optimizer.step()
@@ -77,7 +79,7 @@ class Trainer(object):
         print('[Epoch:{},num_images:{}]'.format(epoch, i * self.args.batch_size + image.data.shape[0]))
         print('Loss:{}'.format(train_loss))
 
-        if self.args.nu_val:
+        if self.args.no_val:
             is_best = False
             self.saver.save_checkpoint({'epoch': epoch + 1, 'state_dict': self.model.module.state_dict(),
                                         'optimizer': self.optimizer.state_dict(), 'best_pred': self.best_pred}, is_best)
@@ -92,7 +94,7 @@ class Trainer(object):
             if self.args.cuda:
                 image, target = image.cuda(), target.cuda()
             with torch.no_grad():
-                _, output = self.model(image)
+                output = self.model(image)
             loss = self.criterion(output, target)
             test_loss += loss.item()
 
@@ -118,7 +120,7 @@ class Trainer(object):
             self.saver.save_checkpoint(
                 {
                     'epoch': epoch + 1,
-                    'state_dict': self.model.module.state_dict(),
+                    'state_dict': self.model.state_dict(),
                     'optimizer': self.optimizer.state_dict(),
                     'best_pred': self.best_pred,
                 }, is_best)
@@ -155,7 +157,7 @@ def ArgParser():
                         help='number of epochs to train (default: auto)')
     parser.add_argument('--start_epoch', type=int, default=0,
                         metavar='N', help='start epochs (default:0)')
-    parser.add_argument('--batch-size', type=int, default=2,
+    parser.add_argument('--batch-size', type=int, default=16,
                         metavar='N', help='input batch size for \
                                     training (default: 2)')
     parser.add_argument('--test-batch-size', type=int, default=2,
@@ -196,7 +198,7 @@ def ArgParser():
                         help='finetuning on a different dataset')
 
     # evaluation option
-    parser.add_argument('--eval-interval', type=int, default=5,
+    parser.add_argument('--eval-interval', type=int, default=1,
                         help='evaluation interval (default: 1)')
     parser.add_argument('--no-val', action='store_true', default=False,
                         help='skip validation during training')

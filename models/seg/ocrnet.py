@@ -88,11 +88,12 @@ class OCRNet(nn.Module):
 
         out = F.interpolate(Augmented_Rep, size=input_size, mode='bilinear', align_corners=False)
 
-        if self.training:
-            aux_out = F.interpolate(soft_object_regions, size=input_size, mode='bilinear', align_corners=False)
-            return {'out': out, 'aux_out': aux_out}, None
-        else:
-            return {}, out
+        # if self.training:
+        #     aux_out = F.interpolate(soft_object_regions, size=input_size, mode='bilinear', align_corners=False)
+        #     return {'out': out, 'aux_out': aux_out}, None
+        # else:
+        #     return {}, out
+        return out
 
 
 if __name__ == '__main__':

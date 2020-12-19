@@ -4,9 +4,7 @@ import torch.nn as nn
 from models.CCNet.CC import CC_module as CrissCrossAttention
 
 affine_par = True
-
-# from Synchronized.sync_batchnorm import SynchronizedBatchNorm2d as SyncBN
-BatchNorm2d = nn.BatchNorm2d  # SyncBN#functools.partial(InPlaceABNSync, activation='identity')
+BatchNorm2d = nn.BatchNorm2d
 
 
 def outS(i):
